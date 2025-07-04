@@ -25,10 +25,25 @@ const noticeController = {
     }
 
     try {
-      const [result] = await db.query(
-        'INSERT INTO notices (title, content, created_by, status) VALUES (?, ?, ?, 1)',
-        [title, content, created_by]
-      );
+      // First try with status column
+      let result;
+      try {
+        [result] = await db.query(
+          'INSERT INTO notices (title, content, created_by, status) VALUES (?, ?, ?, 1)',
+          [title, content, created_by]
+        );
+      } catch (statusError) {
+        // If status column doesn't exist, try without it
+        if (statusError.code === 'ER_BAD_FIELD_ERROR' && statusError.message.includes('status')) {
+          console.log('Status column not found, creating notice without status...');
+          [result] = await db.query(
+            'INSERT INTO notices (title, content, created_by) VALUES (?, ?, ?)',
+            [title, content, created_by]
+          );
+        } else {
+          throw statusError;
+        }
+      }
 
       const [newNotice] = await db.query(`
         SELECT n.*, s.name as created_by_name
