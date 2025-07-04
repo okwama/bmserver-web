@@ -4,9 +4,10 @@ const noticeController = {
   getNotices: async (req, res) => {
     try {
       const [notices] = await db.query(`
-        SELECT*
+        SELECT n.*, s.name as created_by_name
         FROM notices n
-         
+        LEFT JOIN staff s ON n.created_by = s.id
+        ORDER BY n.created_at DESC
       `);
       res.json(notices);
     } catch (error) {
@@ -17,17 +18,22 @@ const noticeController = {
 
   createNotice: async (req, res) => {
     const { title, content } = req.body;
-    const created_by = req.user?.id; // Assuming you have user info in req.user from auth middleware
+    const created_by = req.user?.id || 1; // Default to user ID 1 if no auth middleware
+
+    if (!title || !content) {
+      return res.status(400).json({ message: 'Title and content are required' });
+    }
 
     try {
       const [result] = await db.query(
-        'INSERT INTO notices (title, content, created_by) VALUES (?, ?, ?)',
+        'INSERT INTO notices (title, content, created_by, status) VALUES (?, ?, ?, 1)',
         [title, content, created_by]
       );
 
       const [newNotice] = await db.query(`
-        SELECT *
+        SELECT n.*, s.name as created_by_name
         FROM notices n
+        LEFT JOIN staff s ON n.created_by = s.id
         WHERE n.id = ?
       `, [result.insertId]);
 
@@ -49,9 +55,9 @@ const noticeController = {
       );
 
       const [updatedNotice] = await db.query(`
-        SELECT *
+        SELECT n.*, s.name as created_by_name
         FROM notices n
-         
+        LEFT JOIN staff s ON n.created_by = s.id
         WHERE n.id = ?
       `, [id]);
 
