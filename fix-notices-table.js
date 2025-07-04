@@ -22,17 +22,36 @@ async function fixNoticesTable() {
       `);
       console.log('Notices table created successfully');
     } else {
-      console.log('Notices table exists, checking for status column...');
+      console.log('Notices table exists, checking column structure...');
       
       // Check if status column exists
-      const [columns] = await db.query("SHOW COLUMNS FROM notices LIKE 'status'");
+      const [statusColumns] = await db.query("SHOW COLUMNS FROM notices LIKE 'status'");
       
-      if (columns.length === 0) {
+      if (statusColumns.length === 0) {
         console.log('Adding status column to notices table...');
         await db.query('ALTER TABLE notices ADD COLUMN status TINYINT DEFAULT 1');
         console.log('Status column added successfully');
       } else {
         console.log('Status column already exists');
+      }
+
+      // Check if created_by column exists and its properties
+      const [createdByColumns] = await db.query("SHOW COLUMNS FROM notices LIKE 'created_by'");
+      
+      if (createdByColumns.length === 0) {
+        console.log('Adding created_by column to notices table...');
+        await db.query('ALTER TABLE notices ADD COLUMN created_by INT NULL');
+        console.log('created_by column added successfully');
+      } else {
+        console.log('created_by column exists, checking if it allows NULL...');
+        const column = createdByColumns[0];
+        if (column.Null === 'NO') {
+          console.log('created_by column does not allow NULL, modifying it...');
+          await db.query('ALTER TABLE notices MODIFY COLUMN created_by INT NULL');
+          console.log('created_by column modified to allow NULL');
+        } else {
+          console.log('created_by column already allows NULL');
+        }
       }
     }
     

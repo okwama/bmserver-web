@@ -18,30 +18,55 @@ const noticeController = {
 
   createNotice: async (req, res) => {
     const { title, content } = req.body;
-    const created_by = req.user?.id || 1; // Make it nullable
+    
+    // Handle created_by - if no user is authenticated, use NULL or a default value
+    let created_by = null;
+    if (req.user && req.user.id) {
+      created_by = req.user.id;
+    }
 
     if (!title || !content) {
       return res.status(400).json({ message: 'Title and content are required' });
     }
 
     try {
-      // First try with status column
+      // First try with status column and created_by
       let result;
       try {
         [result] = await db.query(
           'INSERT INTO notices (title, content, created_by, status) VALUES (?, ?, ?, 1)',
           [title, content, created_by]
         );
-      } catch (statusError) {
-        // If status column doesn't exist, try without it
-        if (statusError.code === 'ER_BAD_FIELD_ERROR' && statusError.message.includes('status')) {
+      } catch (nullError) {
+        // If created_by cannot be NULL, try with a default value
+        if (nullError.code === 'ER_BAD_NULL_ERROR' && nullError.message.includes('created_by')) {
+          console.log('created_by cannot be NULL, trying with default value...');
+          try {
+            [result] = await db.query(
+              'INSERT INTO notices (title, content, created_by, status) VALUES (?, ?, ?, 1)',
+              [title, content, 1] // Use default value 1
+            );
+          } catch (statusError) {
+            // If status column doesn't exist, try without it
+            if (statusError.code === 'ER_BAD_FIELD_ERROR' && statusError.message.includes('status')) {
+              console.log('Status column not found, creating notice without status...');
+              [result] = await db.query(
+                'INSERT INTO notices (title, content, created_by) VALUES (?, ?, ?)',
+                [title, content, 1] // Use default value 1
+              );
+            } else {
+              throw statusError;
+            }
+          }
+        } else if (nullError.code === 'ER_BAD_FIELD_ERROR' && nullError.message.includes('status')) {
+          // If status column doesn't exist, try without it
           console.log('Status column not found, creating notice without status...');
           [result] = await db.query(
             'INSERT INTO notices (title, content, created_by) VALUES (?, ?, ?)',
             [title, content, created_by]
           );
         } else {
-          throw statusError;
+          throw nullError;
         }
       }
 
