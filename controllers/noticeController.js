@@ -18,7 +18,7 @@ const noticeController = {
 
   createNotice: async (req, res) => {
     const { title, content } = req.body;
-    const created_by = req.user?.id || 1; // Default to user ID 1 if no auth middleware
+    const created_by = req.user?.id || null; // Make it nullable
 
     if (!title || !content) {
       return res.status(400).json({ message: 'Title and content are required' });

@@ -95,9 +95,9 @@ CREATE TABLE IF NOT EXISTS notices (
   content TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  created_by INT,
+  created_by INT NULL,
   status TINYINT DEFAULT 1,
-  FOREIGN KEY (created_by) REFERENCES staff(id)
+  FOREIGN KEY (created_by) REFERENCES staff(id) ON DELETE SET NULL
 );
 
 -- Create daily_runs table
