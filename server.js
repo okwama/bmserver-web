@@ -12,21 +12,30 @@ const clientController = require('./controllers/clientController');
 const branchController = require('./controllers/branchController');
 const serviceChargeController = require('./controllers/serviceChargeController');
 const noticeController = require('./controllers/noticeController');
+const noticeRoutes = require('./routes/notice.routes');
 require('dotenv').config();
 
 const app = express();
 
-// CORS configuration
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'https://bm-control-room.vercel.app', // Vite's default port
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
+// CORS configuration for all environments
+app.use((req, res, next) => {
+  const allowedOrigins = ['https://bm-control-room.vercel.app', 'http://localhost:5173'];
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
-// Middleware
-app.use(cors(corsOptions));
 app.use(express.json());
 
 // Helper function to map database fields to frontend fields
@@ -51,6 +60,30 @@ const mapRequestFields = (request) => ({
   team_id: request.team_id,
   createdAt: request.created_at,
   updatedAt: request.updated_at
+});
+
+// Simple test endpoint (no database) - moved to top for better error handling
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'Server is running', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Database test endpoint with error handling
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const [results] = await db.query('SELECT 1 + 1 AS solution');
+    res.json({ message: 'Database connection successful', results });
+  } catch (err) {
+    console.error('Database connection error:', err);
+    res.status(500).json({ 
+      error: 'Database connection failed', 
+      message: err.message,
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }
 });
 
 // Auth routes
@@ -444,11 +477,7 @@ app.put('/api/clients/:clientId/service-charges/:chargeId', serviceChargeControl
 app.delete('/api/clients/:clientId/service-charges/:chargeId', serviceChargeController.deleteServiceCharge);
 
 // Notice routes
-app.get('/api/notices', noticeController.getNotices);
-app.post('/api/notices', noticeController.createNotice);
-app.patch('/api/notices/:id', noticeController.updateNotice);
-app.delete('/api/notices/:id', noticeController.deleteNotice);
-app.patch('/api/notices/:id/status', noticeController.toggleNoticeStatus);
+app.use('/api/notices', noticeRoutes);
 
 // SOS routes
 app.get('/api/sos', async (req, res) => {
@@ -502,24 +531,44 @@ app.patch('/api/sos/:id/status', async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
 app.get('/',(req, res) => {
-  res.send('API IS WORKING');
+  res.json({ 
+    message: 'BM Server API is working',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: '1.0.0'
+  });
 });
-// Example API endpoint
-app.get('/api/test', (req, res) => {
-  db.query('SELECT 1 + 1 AS solution')
-    .then(([results]) => {
-      res.json({ message: 'Database connection successful', results });
-    })
-    .catch(err => {
-      res.status(500).json({ error: err.message });
-    });
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  console.error('Error occurred:', err);
+  console.error('Stack trace:', err.stack);
+  
+  res.status(500).json({ 
+    message: 'Something went wrong!',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).json({ 
+    message: 'Route not found',
+    path: req.originalUrl,
+    timestamp: new Date().toISOString()
+  });
 });
 
 const PORT = process.env.PORT || 5000;
